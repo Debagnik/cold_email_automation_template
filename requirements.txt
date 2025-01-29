@@ -1,2 +1,4 @@
 pandas
 schedule
+python-dotenv
+tqdm

@@ -1,11 +1,14 @@
 import smtplib
 import csv
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication  # For attachments
 import os
+from tqdm import tqdm
 from html import escape
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
@@ -25,23 +28,35 @@ def send_email(sender_email, password, recipient_email, name, company):
         msg['Subject'] = f"Inquiry Regarding Mobile Application Developer Positions at {company}"
 
         message = f"""
-            Subject: Exciting Opportunity from {company}
+        <html>
+        <body>
+        <p>Dear {name},</p>
 
-            Dear {name},
+        <p>I am writing to inquire about Mobile Application Developer positions, specifically for Flutter Developers (Android + iOS), at {company}. I have over 2 years and 6 months of experience in this domain and am highly proficient in building cross-platform mobile applications using Flutter.</p>
 
-            I hope this email finds you well. My name is XYZ_ABC, and I am the CTO of {company}. I came across your profile and was truly impressed by your accomplishments.
+        <p>My expertise includes using Azure DevOps for cloud management, Git for version control, and Swagger/Postman for API interaction. I am confident I can quickly integrate into your team and contribute effectively.</p>
 
-            We are currently working on innovative projects at {company}, and I believe your skills and expertise could be a perfect match for our team. If you're interested in learning more, please find my resume attached for additional context.
+        <p>In parallel with my mobile development focus, I have also broadened my skillset to include:</p>
+        <ul>
+            <li>Frontend Web Development: Next.js, React.js, Angular, TypeScript, JavaScript</li>
+            <li>Backend Development & Databases: Node.js, PostgreSQL</li>
+            <li>Cloud Management: AWS (including EC2 instances and other deployment features)</li>
+            <li>Containerization: Docker</li>
+        </ul>
 
-            Feel free to reach out if you have any questions or would like to discuss this opportunity further.
+        <p>I am eager to learn and adapt to new technologies and believe my diverse skill set makes me a versatile candidate.</p>
 
-            Looking forward to hearing from you!
+        <p>You can find more about my professional background on <a href="{LINKED_IN_URL}">LinkedIn</a> and view my projects on <a href="{GITHUB_URL}">GitHub</a>.</p>
 
-            Best regards,
-            XYZ_ABC  
-            CTO, {company}
-            Email: XYZ_ABC@gmail.com
-            """
+        <p>My resume, which provides further details about my qualifications and experience, is attached. Thank you for your time and consideration. I look forward to hearing from you soon.</p>
+
+        <p>Sincerely,</p>
+
+        <p>Debdaru Dasgupta</p>
+        <p>Contact No :- +91 8787-588-495 </p>
+        </body>
+        </html>
+        """
 
 
         msg.attach(MIMEText(message, 'html'))
@@ -64,18 +79,37 @@ def send_email(sender_email, password, recipient_email, name, company):
         print(f"Failed to send email to {recipient_email}: {e}")
 
 
-def process_csv_and_send_emails(csv_file_path, sender_email, password):
+def process_csv_and_send_emails(csv_file_path, sender_email, password, max_threads=10):
     try:
         with open(csv_file_path, 'r', encoding='utf-8') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                name = row['Name']
-                email = row['Email']
-                company = row['Company']
-                send_email(sender_email, password, escape(email), escape(name), escape(company))
-    except FileNotFoundError:
-        print(f"Error: CSV file not found at {csv_file_path}")
-    except Exception as e:
-        print(f"An error occurred while processing the CSV: {e}")
+            reader = list(csv.DictReader(csvfile))
+            total_emails = len(reader)
+            if total_emails == 0:
+                print("No email addresses found in CSV file.")
+                return
 
-process_csv_and_send_emails(CSV_FILE_PATH, SENDER_EMAIL, APP_PASSWORD)
+            print(f"📌 Found {total_emails} email addresses. Starting email sending process...")
+            start_time = time.time()
+
+            with ThreadPoolExecutor(max_workers=max_threads) as executor:
+                futures = {
+                    executor.submit(send_email, sender_email, password, escape(row['Email']), escape(row['Name']), escape(row['Company'])): row['Email']
+                    for row in reader
+                }
+                
+                for future in tqdm(as_completed(futures), total=total_emails, desc="📨 Sending Emails", unit="email"):
+                    print(future.result())  # Print success/failure for each email
+
+            end_time = time.time()
+            total_time = end_time - start_time
+
+            print(f"\n✅ All {total_emails} emails processed!")
+            print(f"⏳ Total time taken: {total_time:.2f} seconds")
+            print(f"📨 Average time per email: {total_time / total_emails:.2f} seconds")
+
+    except FileNotFoundError:
+        print(f"❌ Error: CSV file not found at {csv_file_path}")
+    except Exception as e:
+        print(f"⚠️ An error occurred while processing the CSV: {e}")
+
+process_csv_and_send_emails(CSV_FILE_PATH, SENDER_EMAIL, APP_PASSWORD, max_threads=10)
