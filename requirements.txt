@@ -2,3 +2,4 @@ pandas
 schedule
 python-dotenv
 tqdm
+ollama
